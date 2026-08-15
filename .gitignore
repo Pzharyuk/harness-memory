@@ -1,0 +1,28 @@
+# Binaries
+/memory
+/memoryd
+/bin/
+dist/
+
+# Go
+vendor/
+*.test
+*.out
+coverage.out
+
+# Config / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local data
+/data/
+*.log
