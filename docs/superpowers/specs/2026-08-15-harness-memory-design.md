@@ -37,6 +37,9 @@ homelab (k8s, Vault, tunnel) is an example deploy, not the default.
   stored; secret shown once.
 - Import existing Claude auto-memory directories on first run.
 - Public GitHub project: local dev, CI checks, Dependabot, releases.
+- Claude Code and Grok install the same marketplace plugin from
+  `Pzharyuk/ai-claude-plugins` (thin MCP client + librarian skill). The
+  plugin does **not** reimplement the server.
 
 ## Non-Goals (v1)
 
@@ -69,6 +72,7 @@ homelab (k8s, Vault, tunnel) is an example deploy, not the default.
 | Auth | Per-harness bearer tokens | Revoke Grok without killing Claude; audit names the writer |
 | Deploy | Brew **or** Compose **or** Helm | Same `memoryd`; `DATABASE_URL` chooses local vs remote Postgres |
 | Brew product | Full local server + `postgresql` dep | `brew services start` is a complete brain |
+| Harness attach | Plugin in `ai-claude-plugins` | Same marketplace Claude and Grok already use; HTTP MCP to `memoryd` |
 | Search | Postgres FTS | Enough until hundreds of pages; vector reserved |
 | History | Append-only revisions; supersede, don't delete | Point-in-time belief; no silent rot from decay |
 | Tenant | Single-brain per install | OSS default is personal; team ACL is a later product |
@@ -343,9 +347,92 @@ token is present (cluster ops from a laptop).
 
 ### Skill
 
-`skills/harness-memory/SKILL.md` is the Karpathy schema: when to `save` vs
-`write_page`, how to ingest, how to lint, how to file-back. Installable as
-a Claude / Grok / Codex skill. This is the librarian.
+`skills/harness-memory/SKILL.md` in this repo is the canonical Karpathy
+schema: when to `save` vs `write_page`, how to ingest, how to lint, how
+to file-back. The marketplace plugin vendors a copy (see below).
+
+### Plugin (Claude + Grok marketplace)
+
+Harnesses do not hand-edit MCP JSON as the primary path. They install a
+plugin from the existing marketplace repo
+[`Pzharyuk/ai-claude-plugins`](https://github.com/Pzharyuk/ai-claude-plugins),
+which both Claude Code and Grok already consume.
+
+```
+/plugin marketplace add Pzharyuk/ai-claude-plugins
+/plugin install harness-memory@ai-claude-plugins
+```
+
+Grok:
+
+```
+grok plugin marketplace add Pzharyuk/ai-claude-plugins
+grok plugin install harness-memory --trust
+```
+
+**The plugin is a client, not a second server.** Follow the
+`ai-business-tools` pattern (HTTP MCP), not the Node-wrapper pattern
+used by Vault/Proxmox.
+
+| Piece | Lives in | Role |
+|---|---|---|
+| `memoryd` | `harness-memory` | The store |
+| Plugin `harness-memory/` | `ai-claude-plugins` | `.mcp.json` + skills + marketplace entry |
+| Canonical skill | `harness-memory/skills/` | Source of truth; copied into the plugin |
+
+Plugin layout (same conventions as the other marketplace plugins):
+
+```
+ai-claude-plugins/harness-memory/
+  .claude-plugin/plugin.json
+  .mcp.json
+  skills/configure/SKILL.md
+  skills/harness-memory/SKILL.md    # vendored from this repo
+  README.md
+```
+
+`.mcp.json` points at a running `memoryd`:
+
+```json
+{
+  "mcpServers": {
+    "harness-memory": {
+      "type": "http",
+      "url": "${MEMORY_URL}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MEMORY_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+`plugin.json` `setup.env`:
+
+| Var | Required | Default | Meaning |
+|---|---|---|---|
+| `MEMORY_URL` | no | `http://127.0.0.1:8741` | `memoryd` base URL (local brew or cluster) |
+| `MEMORY_TOKEN` | yes (secret) | — | Per-harness token from `memory token create --harness <name>` |
+
+`skills/configure` walks: is `memoryd` up? create a token for this
+harness; write `MEMORY_URL` / `MEMORY_TOKEN` into plugin env /
+`~/.mcp.json`; optional projection dir.
+
+`memoryd` must expose MCP at `POST /mcp` (streamable HTTP) on the same
+listener as `/v1`. If a harness cannot speak HTTP MCP, `memory mcp`
+stdio remains the escape hatch (`command: memory`, `args: ["mcp"]`).
+
+**Do not** add a Node MCP server that re-wraps the HTTP API. Two
+implementations of `save`/`recall` will drift.
+
+When the skill in `harness-memory` changes, the plugin copy is updated
+in the same implementation slice (or a tiny sync script in CI later).
+v1: copy by hand and note the source commit in the plugin README.
+
+Marketplace: add an entry to
+`ai-claude-plugins/.claude-plugin/marketplace.json` and a row on that
+repo's README. Update the marketplace description to mention shared
+agent memory, not only infra plugins.
 
 ### Repo layout
 
@@ -374,9 +461,11 @@ Go module: `github.com/Pzharyuk/harness-memory`.
 | Docker | `docker compose up -d` (Postgres + `memoryd`) |
 | Kubernetes | Helm chart in `deploy/chart` |
 | Release binary | GitHub Releases via GoReleaser (darwin/linux × amd64/arm64) |
+| Claude / Grok | `/plugin install harness-memory@ai-claude-plugins` (server still required) |
 
-First-run: `memory init` → `memory token create --harness <name>` → point
-the harness MCP config at `http://127.0.0.1:<port>` with that token.
+First-run: `memory init` → `memory token create --harness <name>` →
+install the plugin and set `MEMORY_TOKEN` (and `MEMORY_URL` if not
+localhost).
 
 README is written for that path. `deploy/` holds the maintainer's cluster
 example (Vault, ingress) as *an* example.
@@ -495,5 +584,9 @@ Build in this order so each step is usable:
 6. Projector + Claude import.
 7. Wiki pages, links, lint, inbox accept/reject.
 8. Skill + README install story + GoReleaser + formula.
+9. Marketplace plugin in `ai-claude-plugins` (HTTP `.mcp.json`, configure
+   skill, vendored librarian skill, marketplace.json + README row).
 
-Do not ship a compile worker in the first implementation plan.
+Do not ship a compile worker in the first implementation plan. The
+plugin ships in the same overall plan but is a separate PR in the
+plugins repo, after `memoryd` serves `/mcp`.

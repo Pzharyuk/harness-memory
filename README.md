@@ -12,6 +12,7 @@ Point Claude Code, Grok, Codex, or anything that speaks MCP at one store. A fact
 - `memory` — CLI (`init`, `token create`, `import`, `inbox`, `lint`)
 - One-way projection to Claude/Grok `MEMORY.md` so native session-start still works
 - Install via **Homebrew** (full local server + Postgres), **Docker Compose**, or **Helm**
+- Attach Claude Code or Grok via the **`harness-memory` plugin** on [`Pzharyuk/ai-claude-plugins`](https://github.com/Pzharyuk/ai-claude-plugins) (same marketplace both harnesses already use)
 
 ## License
 
