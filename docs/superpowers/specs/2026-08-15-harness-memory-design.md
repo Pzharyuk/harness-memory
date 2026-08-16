@@ -1,7 +1,7 @@
 # Harness Memory — Shared Postgres Memory + LLM Wiki
 
 **Date:** 2026-08-15
-**Status:** Design (awaiting user review)
+**Status:** Approved
 **Repo:** https://github.com/Pzharyuk/harness-memory
 **License:** MIT
 
