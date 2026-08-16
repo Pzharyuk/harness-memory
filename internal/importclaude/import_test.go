@@ -22,6 +22,7 @@ func fixtureDir(t *testing.T) string {
 
 func openTest(t *testing.T) *store.Store {
 	t.Helper()
+	store.LockTestDB(t)
 	url := os.Getenv("MEMORY_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("MEMORY_TEST_DATABASE_URL unset")
@@ -101,6 +102,47 @@ func TestApplyImportsMemoryByTitle(t *testing.T) {
 	}
 	if !strings.Contains(got.Body, "pipenv") {
 		t.Fatalf("body=%q", got.Body)
+	}
+}
+
+func TestApplyReportsProposedConflict(t *testing.T) {
+	st := openTest(t)
+	ctx := context.Background()
+
+	if _, err := st.SaveMemory(ctx, types.Memory{
+		Scope:   types.ScopeUser,
+		Kind:    types.MemoryKindUser,
+		Title:   "Vault",
+		Summary: "existing",
+		Body:    "something else entirely",
+	}, "grok"); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := Parse(fixtureDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Apply(ctx, st, plan, "import")
+	if err == nil {
+		t.Fatal("expected proposed conflict")
+	}
+	if !strings.Contains(err.Error(), "Vault") {
+		t.Fatalf("err=%v want proposed title Vault", err)
+	}
+	if !strings.Contains(err.Error(), "proposed") {
+		t.Fatalf("err=%v want proposed", err)
+	}
+
+	got, err := st.GetActiveMemoryByTitle(ctx, types.ScopeUser, "", "Vault")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("Vault memory missing")
+	}
+	if got.Body != "something else entirely" {
+		t.Fatalf("body=%q want original unchanged", got.Body)
 	}
 }
 

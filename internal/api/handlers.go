@@ -310,14 +310,12 @@ func (s *server) recall(w http.ResponseWriter, r *http.Request) {
 
 	var userLines, projectLines []IndexLine
 	if req.Query != "" {
-		userScope := types.ScopeUser
-		userHits, err := s.st.Search(r.Context(), req.Query, &userScope, "", recallMaxLines)
+		userHits, err := s.st.SearchScoped(r.Context(), req.Query, types.ScopeUser, "", recallMaxLines)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		projScope := types.ScopeProject
-		projectHits, err := s.st.Search(r.Context(), req.Query, &projScope, req.Project, recallMaxLines)
+		projectHits, err := s.st.SearchScoped(r.Context(), req.Query, types.ScopeProject, req.Project, recallMaxLines)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return

@@ -34,9 +34,8 @@ func insertProposal(ctx context.Context, q querier, p types.Proposal) (types.Pro
 	if p.CreatedByHarness == "" {
 		return types.Proposal{}, fmt.Errorf("proposal harness is required")
 	}
-	if p.Status == "" {
-		p.Status = types.ProposalStatusOpen
-	}
+	// Clients (HTTP / MCP) must not insert accepted or rejected rows.
+	p.Status = types.ProposalStatusOpen
 	payload := p.Payload
 	if len(payload) == 0 {
 		payload = json.RawMessage(`{}`)
@@ -52,7 +51,7 @@ func insertProposal(ctx context.Context, q querier, p types.Proposal) (types.Pro
 	return out, nil
 }
 
-// InsertProposal files an inbox item. Status defaults to open.
+// InsertProposal files an inbox item. Status is always open; client status is ignored.
 func (s *Store) InsertProposal(ctx context.Context, p types.Proposal) (types.Proposal, error) {
 	return insertProposal(ctx, s.Pool, p)
 }

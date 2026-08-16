@@ -228,13 +228,11 @@ func (h *handler) toolRecall(ctx context.Context, args json.RawMessage) (string,
 
 	var userLines, projectLines []indexLine
 	if req.Query != "" {
-		userScope := types.ScopeUser
-		userHits, err := h.st.Search(ctx, req.Query, &userScope, "", recallMaxLines)
+		userHits, err := h.st.SearchScoped(ctx, req.Query, types.ScopeUser, "", recallMaxLines)
 		if err != nil {
 			return "", err
 		}
-		projScope := types.ScopeProject
-		projectHits, err := h.st.Search(ctx, req.Query, &projScope, req.Project, recallMaxLines)
+		projectHits, err := h.st.SearchScoped(ctx, req.Query, types.ScopeProject, req.Project, recallMaxLines)
 		if err != nil {
 			return "", err
 		}

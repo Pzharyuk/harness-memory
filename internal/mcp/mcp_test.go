@@ -21,6 +21,7 @@ import (
 
 func openTest(t *testing.T) *store.Store {
 	t.Helper()
+	store.LockTestDB(t)
 	url := os.Getenv("MEMORY_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("MEMORY_TEST_DATABASE_URL unset")

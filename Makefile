@@ -1,6 +1,6 @@
 .PHONY: test lint build dev
 test:
-	go test ./...
+	go test -p 1 ./...
 lint:
 	golangci-lint run
 build:

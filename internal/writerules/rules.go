@@ -22,7 +22,7 @@ func DecideMemorySave(existing *types.Memory, incoming types.Memory) Decision {
 	if strings.TrimSpace(existing.Body) == strings.TrimSpace(incoming.Body) {
 		return Decision{Path: types.PathAuto, Reason: "equal body"}
 	}
-	if strings.HasPrefix(incoming.Body, existing.Body) {
+	if isPrefixExtend(incoming.Body, existing.Body) {
 		return Decision{Path: types.PathAuto, Reason: "prefix update"}
 	}
 	return Decision{Path: types.PathProposed, Reason: "body contradicts existing memory"}
@@ -42,10 +42,19 @@ func DecidePageWrite(existing *types.Page, incoming types.Page, hasContradictsLi
 	if strings.TrimSpace(existing.BodyMarkdown) == strings.TrimSpace(incoming.BodyMarkdown) {
 		return Decision{Path: types.PathAuto, Reason: "equal body"}
 	}
-	if strings.HasPrefix(incoming.BodyMarkdown, existing.BodyMarkdown) {
+	if isPrefixExtend(incoming.BodyMarkdown, existing.BodyMarkdown) {
 		return Decision{Path: types.PathAuto, Reason: "prefix update"}
 	}
 	return Decision{Path: types.PathProposed, Reason: "body contradicts existing page"}
+}
+
+// isPrefixExtend is true when incoming extends a non-empty existing body.
+// strings.HasPrefix(x, "") is true for every x; an empty existing body is not a prefix.
+func isPrefixExtend(incoming, existing string) bool {
+	if strings.TrimSpace(existing) == "" {
+		return false
+	}
+	return strings.HasPrefix(incoming, existing)
 }
 
 // DecideDelete always requires a proposal.

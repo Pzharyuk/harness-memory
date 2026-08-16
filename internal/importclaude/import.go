@@ -107,6 +107,7 @@ func Apply(ctx context.Context, st *store.Store, plan Plan, harness string) erro
 	}
 	srcID := src.ID
 
+	var proposed []string
 	for _, item := range plan.Memories {
 		mem := types.Memory{
 			Scope:    types.ScopeUser,
@@ -116,8 +117,13 @@ func Apply(ctx context.Context, st *store.Store, plan Plan, harness string) erro
 			Body:     item.Body,
 			SourceID: &srcID,
 		}
-		if _, err := st.SaveMemory(ctx, mem, harness); err != nil {
+		res, err := st.SaveMemory(ctx, mem, harness)
+		if err != nil {
 			return fmt.Errorf("save %q: %w", item.Title, err)
+		}
+		if res.Status == types.SaveStatusProposed {
+			proposed = append(proposed, item.Title)
+			continue
 		}
 		if len(item.Body) <= sourceSummaryBytes {
 			continue
@@ -131,9 +137,16 @@ func Apply(ctx context.Context, st *store.Store, plan Plan, harness string) erro
 			PageType:     types.PageTypeSourceSummary,
 			SourceIDs:    []uuid.UUID{srcID},
 		}
-		if _, err := st.WritePage(ctx, page, harness); err != nil {
+		pageRes, err := st.WritePage(ctx, page, harness)
+		if err != nil {
 			return fmt.Errorf("write page %q: %w", item.Title, err)
 		}
+		if pageRes.Status == types.SaveStatusProposed {
+			proposed = append(proposed, item.Title)
+		}
+	}
+	if len(proposed) > 0 {
+		return fmt.Errorf("proposed (not applied): %s", strings.Join(proposed, ", "))
 	}
 	return nil
 }

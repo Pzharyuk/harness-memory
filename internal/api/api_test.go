@@ -19,6 +19,7 @@ import (
 
 func openTest(t *testing.T) *store.Store {
 	t.Helper()
+	store.LockTestDB(t)
 	url := os.Getenv("MEMORY_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("MEMORY_TEST_DATABASE_URL unset")
@@ -200,6 +201,51 @@ func TestGrokSaveAndRecall(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("recall missing summary: %+v", rec.User)
+	}
+}
+
+func TestRecallQueryEmptyProjectDoesNotListOtherProjects(t *testing.T) {
+	e := newTestEnv(t)
+	for _, mem := range []types.Memory{
+		{Scope: types.ScopeUser, Kind: types.MemoryKindUser, Title: "vault-user", Summary: "user vault", Body: "vault user fact"},
+		{Scope: types.ScopeProject, ProjectSlug: "other", Kind: types.MemoryKindProject, Title: "vault-other", Summary: "other vault", Body: "vault project fact"},
+	} {
+		raw, err := json.Marshal(mem)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := e.do(http.MethodPost, "/v1/memories", e.grok, string(raw))
+		body := readBody(t, res)
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("save %q status=%d body=%s", mem.Title, res.StatusCode, body)
+		}
+	}
+
+	res := e.do(http.MethodPost, "/v1/recall", e.grok, `{"query":"vault"}`)
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("recall status=%d body=%s", res.StatusCode, body)
+	}
+	var rec struct {
+		User    []IndexLine `json:"user"`
+		Project []IndexLine `json:"project"`
+	}
+	if err := json.Unmarshal(body, &rec); err != nil {
+		t.Fatalf("recall json: %v body=%s", err, body)
+	}
+	foundUser := false
+	for _, line := range rec.User {
+		if line.Title == "vault-user" {
+			foundUser = true
+		}
+	}
+	if !foundUser {
+		t.Fatalf("user recall missing vault-user: %+v", rec.User)
+	}
+	for _, line := range rec.Project {
+		if line.Title == "vault-other" {
+			t.Fatalf("empty project leaked other project's memory: %+v", rec.Project)
+		}
 	}
 }
 

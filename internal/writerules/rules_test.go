@@ -37,6 +37,22 @@ func TestPrefixUpdateIsAuto(t *testing.T) {
 	}
 }
 
+func TestEmptyExistingBodyIsProposed(t *testing.T) {
+	ex := &types.Memory{Title: "pipenv", Body: ""}
+	d := DecideMemorySave(ex, types.Memory{Title: "pipenv", Body: "use poetry"})
+	if d.Path != types.PathProposed {
+		t.Fatalf("empty existing body must not prefix-match: %+v", d)
+	}
+}
+
+func TestEmptyExistingPageBodyIsProposed(t *testing.T) {
+	ex := &types.Page{Slug: "vault", BodyMarkdown: ""}
+	d := DecidePageWrite(ex, types.Page{Slug: "vault", BodyMarkdown: "new"}, false)
+	if d.Path != types.PathProposed {
+		t.Fatalf("empty existing page body must not prefix-match: %+v", d)
+	}
+}
+
 func TestDeleteIsProposed(t *testing.T) {
 	if DecideDelete().Path != types.PathProposed {
 		t.Fatal("delete must be proposed")

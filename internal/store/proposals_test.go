@@ -54,10 +54,12 @@ func TestListOpenProposals(t *testing.T) {
 		Action:           types.ProposalActionDelete,
 		Payload:          json.RawMessage(`{"title":"closed"}`),
 		Reason:           "drop",
-		Status:           types.ProposalStatusRejected,
 		CreatedByHarness: "grok",
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RejectProposal(ctx, closed.ID, "admin"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,6 +72,32 @@ func TestListOpenProposals(t *testing.T) {
 	}
 	if got[0].ID == closed.ID {
 		t.Fatal("rejected proposal listed as open")
+	}
+}
+
+func TestInsertProposalIgnoresClientStatus(t *testing.T) {
+	st := openTest(t)
+	ctx := context.Background()
+
+	got, err := st.InsertProposal(ctx, types.Proposal{
+		Action:           types.ProposalActionUpdate,
+		Payload:          json.RawMessage(`{"title":"sneak"}`),
+		Reason:           "client tried accepted",
+		Status:           types.ProposalStatusAccepted,
+		CreatedByHarness: "grok",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != types.ProposalStatusOpen {
+		t.Fatalf("status=%q want open", got.Status)
+	}
+	open, err := st.ListOpenProposals(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(open) != 1 || open[0].ID != got.ID {
+		t.Fatalf("open=%+v want only %s", open, got.ID)
 	}
 }
 
