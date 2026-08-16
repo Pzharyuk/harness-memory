@@ -212,6 +212,45 @@ func TestGrokAdminForbidden(t *testing.T) {
 	}
 }
 
+func TestBootstrapOnceThenConflict(t *testing.T) {
+	st := openTest(t)
+	srv := httptest.NewServer(New(st, config.Config{}))
+	t.Cleanup(srv.Close)
+	e := &testEnv{t: t, st: st, srv: srv}
+
+	res := e.do(http.MethodPost, "/v1/admin/bootstrap", "", "")
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("first bootstrap status=%d body=%s", res.StatusCode, body)
+	}
+	var got struct {
+		ID        string `json:"id"`
+		Harness   string `json:"harness"`
+		Plaintext string `json:"plaintext"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("json: %v body=%s", err, body)
+	}
+	if got.ID == "" || got.Harness != "admin" || got.Plaintext == "" {
+		t.Fatalf("bootstrap=%+v", got)
+	}
+	if bytes.Contains(body, []byte("token_hash")) {
+		t.Fatal("bootstrap leaked token_hash")
+	}
+
+	res = e.do(http.MethodPost, "/v1/admin/bootstrap", "", "")
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("second bootstrap status=%d body=%s", res.StatusCode, body)
+	}
+
+	res = e.do(http.MethodGet, "/v1/admin/tokens", got.Plaintext, "")
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("bootstrapped admin list status=%d body=%s", res.StatusCode, body)
+	}
+}
+
 func TestAdminMintToken(t *testing.T) {
 	e := newTestEnv(t)
 	res := e.do(http.MethodPost, "/v1/admin/tokens", e.admin, `{"harness":"claude","label":"dev"}`)

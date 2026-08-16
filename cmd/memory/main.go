@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
+
+	"github.com/Pzharyuk/harness-memory/internal/cli"
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "not implemented")
-	os.Exit(2)
+	os.Exit(cli.Run(os.Args[1:], cli.Env{}))
 }

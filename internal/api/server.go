@@ -14,6 +14,7 @@ func New(st *store.Store, cfg config.Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /readyz", s.readyz)
+	mux.HandleFunc("POST /v1/admin/bootstrap", s.bootstrap)
 	mux.HandleFunc("POST /v1/admin/tokens", s.createToken)
 	mux.HandleFunc("GET /v1/admin/tokens", s.listTokens)
 	mux.HandleFunc("POST /v1/admin/tokens/{id}/revoke", s.revokeToken)

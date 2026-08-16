@@ -63,6 +63,38 @@ func (s *server) readyz(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (s *server) bootstrap(w http.ResponseWriter, r *http.Request) {
+	toks, err := s.st.ListTokens(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if len(toks) > 0 {
+		writeError(w, http.StatusConflict, "already bootstrapped")
+		return
+	}
+	secret, err := randomSecret()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	hash, err := auth.Hash(secret)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	tok, err := s.st.CreateToken(r.Context(), "admin", "bootstrap", hash)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":        tok.ID,
+		"harness":   tok.Harness,
+		"plaintext": secret,
+	})
+}
+
 func (s *server) createToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Harness string `json:"harness"`

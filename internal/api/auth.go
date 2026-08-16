@@ -17,7 +17,7 @@ const CtxToken contextKey = iota
 
 func (s *server) withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isV1(r.URL.Path) {
+		if !isV1(r.URL.Path) || isBootstrap(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -51,6 +51,10 @@ func isV1(path string) bool {
 
 func isAdminPath(path string) bool {
 	return strings.HasPrefix(path, "/v1/admin/")
+}
+
+func isBootstrap(r *http.Request) bool {
+	return r.Method == http.MethodPost && r.URL.Path == "/v1/admin/bootstrap"
 }
 
 func bearerToken(r *http.Request) (string, bool) {
