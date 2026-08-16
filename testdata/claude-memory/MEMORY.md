@@ -1,0 +1,2 @@
+- [Python tooling preferences](feedback_python_tooling.md) — use pipenv
+- [Vault](project_vault.md) — raft quorum

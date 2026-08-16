@@ -265,3 +265,28 @@ func (s *Store) GetPage(ctx context.Context, id uuid.UUID) (types.Page, error) {
 func (s *Store) GetActivePageBySlug(ctx context.Context, scope types.Scope, project, slug string) (*types.Page, error) {
 	return getActivePageBySlug(ctx, s.Pool, scope, project, slug, false)
 }
+
+// ListActivePages returns every active wiki page (all scopes).
+func (s *Store) ListActivePages(ctx context.Context) ([]types.Page, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT `+pageCols+`
+		FROM wiki_pages
+		WHERE status = 'active'
+		ORDER BY updated_at DESC, title ASC, id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list active pages: %w", err)
+	}
+	defer rows.Close()
+
+	out := []types.Page{}
+	for rows.Next() {
+		p, err := scanPage(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list active pages: %w", err)
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list active pages: %w", err)
+	}
+	return out, nil
+}

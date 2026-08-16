@@ -283,3 +283,28 @@ func (s *Store) ListMemories(ctx context.Context, scope types.Scope, project str
 	}
 	return out, nil
 }
+
+// ListActiveMemories returns every active memory (all scopes).
+func (s *Store) ListActiveMemories(ctx context.Context) ([]types.Memory, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT `+memoryCols+`
+		FROM memories
+		WHERE status = 'active'
+		ORDER BY updated_at DESC, title ASC, id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list active memories: %w", err)
+	}
+	defer rows.Close()
+
+	out := []types.Memory{}
+	for rows.Next() {
+		m, err := scanMemory(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list active memories: %w", err)
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list active memories: %w", err)
+	}
+	return out, nil
+}

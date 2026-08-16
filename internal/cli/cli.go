@@ -17,7 +17,9 @@ import (
 
 	"github.com/Pzharyuk/harness-memory/internal/api"
 	"github.com/Pzharyuk/harness-memory/internal/config"
+	"github.com/Pzharyuk/harness-memory/internal/importclaude"
 	"github.com/Pzharyuk/harness-memory/internal/mcp"
+	"github.com/Pzharyuk/harness-memory/internal/project"
 	"github.com/Pzharyuk/harness-memory/internal/store"
 )
 
@@ -39,6 +41,8 @@ commands:
   status            show URL, readiness, and token
   serve             run the memoryd HTTP server
   mcp               stdio MCP proxy to memoryd
+  project           write MEMORY.md projection (--out)
+  import claude     import a Claude auto-memory dir (--path, --dry-run)
 `
 
 // Env is the process environment for Run. Zero values use os and http defaults.
@@ -102,6 +106,10 @@ func Run(args []string, env Env) int {
 		return runServe(args[1:], env)
 	case "mcp":
 		return runMCP(args[1:], env)
+	case "project":
+		return runProject(args[1:], env)
+	case "import":
+		return runImport(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Stdout, usage)
 		return 0
@@ -574,4 +582,100 @@ func runServe(args []string, env Env) int {
 		return 1
 	}
 	return 0
+}
+
+func openStore(cfg config.Config) (*store.Store, error) {
+	if cfg.DatabaseURL == "" {
+		return nil, fmt.Errorf("MEMORY_DATABASE_URL is required")
+	}
+	return store.Open(context.Background(), cfg.DatabaseURL)
+}
+
+func runProject(args []string, env Env) int {
+	fs := flag.NewFlagSet("project", flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	out := fs.String("out", "", "output directory")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *out == "" {
+		fmt.Fprintln(env.Stderr, "--out is required")
+		return 2
+	}
+	cfg := loadCfg(env)
+	st, err := openStore(cfg)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "project: %v\n", err)
+		return 1
+	}
+	defer st.Pool.Close()
+
+	ctx := context.Background()
+	mems, err := st.ListActiveMemories(ctx)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "project: list memories: %v\n", err)
+		return 1
+	}
+	pages, err := st.ListActivePages(ctx)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "project: list pages: %v\n", err)
+		return 1
+	}
+	if err := project.Write(*out, mems, pages); err != nil {
+		fmt.Fprintf(env.Stderr, "project: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(env.Stdout, "ok\t%d memories\t%d pages\n", len(mems), len(pages))
+	return 0
+}
+
+func runImport(args []string, env Env) int {
+	if len(args) == 0 || args[0] != "claude" {
+		fmt.Fprintln(env.Stderr, "usage: memory import claude --path <dir> [--dry-run]")
+		return 2
+	}
+	return runImportClaude(args[1:], env)
+}
+
+func runImportClaude(args []string, env Env) int {
+	fs := flag.NewFlagSet("import claude", flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	path := fs.String("path", "", "Claude auto-memory directory")
+	dryRun := fs.Bool("dry-run", false, "print plan and write nothing")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *path == "" {
+		fmt.Fprintln(env.Stderr, "--path is required")
+		return 2
+	}
+	plan, err := importclaude.Parse(*path)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "import: %v\n", err)
+		return 1
+	}
+	if *dryRun {
+		printImportPlan(env.Stdout, plan)
+		return 0
+	}
+	cfg := loadCfg(env)
+	st, err := openStore(cfg)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "import: %v\n", err)
+		return 1
+	}
+	defer st.Pool.Close()
+	if err := importclaude.Apply(context.Background(), st, plan, importclaude.Harness); err != nil {
+		fmt.Fprintf(env.Stderr, "import: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(env.Stdout, "ok\t%d memories\n", len(plan.Memories))
+	return 0
+}
+
+func printImportPlan(w io.Writer, plan importclaude.Plan) {
+	fmt.Fprintf(w, "%d memories\n", len(plan.Memories))
+	for _, item := range plan.Memories {
+		fmt.Fprintf(w, "%s\t%s\t%s\n", item.Kind, item.Title, item.File)
+	}
 }

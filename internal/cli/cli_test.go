@@ -146,3 +146,24 @@ func TestMCPProxiesStdio(t *testing.T) {
 		t.Fatalf("stdout=%s", out.String())
 	}
 }
+
+func TestImportClaudeDryRun(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "claude-memory")
+	var out bytes.Buffer
+	env := Env{
+		Stdout: &out,
+		Stderr: io.Discard,
+		Getenv: func(string) string { return "" },
+	}
+	code := Run([]string{"import", "claude", "--path", path, "--dry-run"}, env)
+	if code != 0 {
+		t.Fatalf("exit=%d out=%q", code, out.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, "Python tooling preferences") {
+		t.Fatalf("dry-run missing title: %q", text)
+	}
+	if !strings.Contains(text, "feedback") {
+		t.Fatalf("dry-run missing kind: %q", text)
+	}
+}
