@@ -51,3 +51,30 @@ func insertProposal(ctx context.Context, q querier, p types.Proposal) (types.Pro
 func (s *Store) InsertProposal(ctx context.Context, p types.Proposal) (types.Proposal, error) {
 	return insertProposal(ctx, s.Pool, p)
 }
+
+// ListOpenProposals returns inbox items with status open, oldest first.
+func (s *Store) ListOpenProposals(ctx context.Context) ([]types.Proposal, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id, action, payload, reason, status, created_by_harness, created_at
+		FROM proposals
+		WHERE status = 'open'
+		ORDER BY created_at ASC, id ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list open proposals: %w", err)
+	}
+	defer rows.Close()
+
+	out := []types.Proposal{}
+	for rows.Next() {
+		p, err := scanProposal(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list open proposals: %w", err)
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list open proposals: %w", err)
+	}
+	return out, nil
+}

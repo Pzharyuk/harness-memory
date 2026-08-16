@@ -103,3 +103,46 @@ func TestInitWritesConfigAndPrintsToken(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPProxiesStdio(t *testing.T) {
+	var gotAuth, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"ok":true}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}` + "\n")
+	var out bytes.Buffer
+	env := Env{
+		Stdin:  in,
+		Stdout: &out,
+		Stderr: io.Discard,
+		Getenv: func(key string) string {
+			switch key {
+			case "MEMORY_URL":
+				return srv.URL
+			case "MEMORY_TOKEN":
+				return "cli-token"
+			default:
+				return ""
+			}
+		},
+		HTTP: srv.Client(),
+	}
+	code := Run([]string{"mcp"}, env)
+	if code != 0 {
+		t.Fatalf("exit=%d out=%q", code, out.String())
+	}
+	if gotPath != "/mcp" {
+		t.Fatalf("path=%q want /mcp", gotPath)
+	}
+	if gotAuth != "Bearer cli-token" {
+		t.Fatalf("auth=%q", gotAuth)
+	}
+	if !strings.Contains(out.String(), `"ok":true`) {
+		t.Fatalf("stdout=%s", out.String())
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Pzharyuk/harness-memory/internal/config"
+	"github.com/Pzharyuk/harness-memory/internal/mcp"
 	"github.com/Pzharyuk/harness-memory/internal/store"
 )
 
@@ -26,6 +27,7 @@ func New(st *store.Store, cfg config.Config) http.Handler {
 	mux.HandleFunc("GET /v1/pages/{id}", s.getPage)
 	mux.HandleFunc("POST /v1/recall", s.recall)
 	mux.HandleFunc("POST /v1/search", s.search)
+	mux.Handle("POST /mcp", mcp.New(st, cfg))
 	return s.withAuth(mux)
 }
 

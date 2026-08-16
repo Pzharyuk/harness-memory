@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Pzharyuk/harness-memory/internal/mcp"
 	"github.com/Pzharyuk/harness-memory/internal/store"
 	"github.com/Pzharyuk/harness-memory/internal/types"
 )
@@ -17,7 +18,7 @@ const CtxToken contextKey = iota
 
 func (s *server) withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isV1(r.URL.Path) || isBootstrap(r) {
+		if !needsAuth(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -41,8 +42,16 @@ func (s *server) withAuth(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), CtxToken, tok)
+		ctx = mcp.WithHarness(ctx, tok.Harness)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func needsAuth(r *http.Request) bool {
+	if isBootstrap(r) {
+		return false
+	}
+	return isV1(r.URL.Path) || r.URL.Path == "/mcp"
 }
 
 func isV1(path string) bool {

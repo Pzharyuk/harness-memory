@@ -17,6 +17,7 @@ import (
 
 	"github.com/Pzharyuk/harness-memory/internal/api"
 	"github.com/Pzharyuk/harness-memory/internal/config"
+	"github.com/Pzharyuk/harness-memory/internal/mcp"
 	"github.com/Pzharyuk/harness-memory/internal/store"
 )
 
@@ -37,10 +38,12 @@ commands:
   token revoke      revoke a token (--id)
   status            show URL, readiness, and token
   serve             run the memoryd HTTP server
+  mcp               stdio MCP proxy to memoryd
 `
 
 // Env is the process environment for Run. Zero values use os and http defaults.
 type Env struct {
+	Stdin     io.Reader
 	Stdout    io.Writer
 	Stderr    io.Writer
 	Getenv    func(string) string
@@ -97,6 +100,8 @@ func Run(args []string, env Env) int {
 		return runStatus(args[1:], env)
 	case "serve":
 		return runServe(args[1:], env)
+	case "mcp":
+		return runMCP(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Stdout, usage)
 		return 0
@@ -108,6 +113,9 @@ func Run(args []string, env Env) int {
 }
 
 func (e Env) withDefaults() Env {
+	if e.Stdin == nil {
+		e.Stdin = os.Stdin
+	}
 	if e.Stdout == nil {
 		e.Stdout = os.Stdout
 	}
@@ -522,6 +530,24 @@ func runStatus(args []string, env Env) int {
 		default:
 			fmt.Fprintf(env.Stdout, "token\tset\n")
 		}
+	}
+	return 0
+}
+
+func runMCP(args []string, env Env) int {
+	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	cfg := loadCfg(env)
+	if cfg.URL == "" {
+		fmt.Fprintln(env.Stderr, "MEMORY_URL is required")
+		return 1
+	}
+	if err := mcp.Proxy(context.Background(), env.Stdin, env.Stdout, cfg.URL, cfg.Token, env.HTTP); err != nil {
+		fmt.Fprintf(env.Stderr, "mcp: %v\n", err)
+		return 1
 	}
 	return 0
 }
