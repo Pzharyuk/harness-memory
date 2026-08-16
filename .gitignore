@@ -29,3 +29,6 @@ coverage.out
 
 # Isolated worktrees
 .worktrees/
+
+# SDD scratch
+.superpowers/
