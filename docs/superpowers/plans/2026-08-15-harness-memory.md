@@ -6,7 +6,7 @@
 
 **Architecture:** One `memoryd` process owns Postgres. HTTP `/v1` and streamable HTTP MCP `/mcp` share the same handlers. The `memory` CLI talks to `memoryd` with an admin token. Agents compile wiki pages via tools; the server enforces write rules (auto vs proposal). A one-way projector writes Claude/Grok `MEMORY.md`. No in-process LLM. The marketplace plugin is HTTP MCP + skills only.
 
-**Tech Stack:** Go 1.24, `pgx/v5`, stdlib `net/http`, `golang.org/x/crypto/argon2`, official MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`), Postgres 16 FTS, Docker Compose, Helm, GoReleaser, GitHub Actions, Dependabot.
+**Tech Stack:** Go 1.24, `pgx/v5`, stdlib `net/http`, `golang.org/x/crypto/argon2`, JSON-RPC 2.0 MCP at `POST /mcp`, Postgres 16 FTS, Docker Compose, Helm, GoReleaser, GitHub Actions, Dependabot.
 
 **Spec:** `docs/superpowers/specs/2026-08-15-harness-memory-design.md`
 
