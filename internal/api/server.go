@@ -20,6 +20,8 @@ func New(st *store.Store, cfg config.Config) http.Handler {
 	mux.HandleFunc("POST /v1/admin/tokens/{id}/revoke", s.revokeToken)
 	mux.HandleFunc("POST /v1/memories", s.saveMemory)
 	mux.HandleFunc("GET /v1/memories/{id}", s.getMemory)
+	mux.HandleFunc("POST /v1/sources", s.ingestSource)
+	mux.HandleFunc("GET /v1/sources/{id}", s.getSource)
 	mux.HandleFunc("POST /v1/recall", s.recall)
 	return s.withAuth(mux)
 }

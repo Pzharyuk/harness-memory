@@ -251,6 +251,68 @@ func TestBootstrapOnceThenConflict(t *testing.T) {
 	}
 }
 
+func TestIngestSourceIdempotentHTTP(t *testing.T) {
+	e := newTestEnv(t)
+	payload := `{"scope":"user","kind":"import","title":"notes","body":"hello source"}`
+
+	res := e.do(http.MethodPost, "/v1/sources", e.grok, payload)
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("first ingest status=%d body=%s", res.StatusCode, body)
+	}
+	var first struct {
+		Source  types.Source `json:"source"`
+		Created bool         `json:"created"`
+	}
+	if err := json.Unmarshal(body, &first); err != nil {
+		t.Fatalf("json: %v body=%s", err, body)
+	}
+	if !first.Created {
+		t.Fatal("first created=false")
+	}
+	if first.Source.ID.String() == "00000000-0000-0000-0000-000000000000" {
+		t.Fatal("empty source id")
+	}
+	if first.Source.CreatedByHarness != "grok" {
+		t.Fatalf("harness=%q want grok", first.Source.CreatedByHarness)
+	}
+	if first.Source.ContentSHA256 == "" {
+		t.Fatal("missing content_sha256")
+	}
+
+	res = e.do(http.MethodPost, "/v1/sources", e.grok, payload)
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("second ingest status=%d body=%s", res.StatusCode, body)
+	}
+	var second struct {
+		Source  types.Source `json:"source"`
+		Created bool         `json:"created"`
+	}
+	if err := json.Unmarshal(body, &second); err != nil {
+		t.Fatalf("json: %v body=%s", err, body)
+	}
+	if second.Created {
+		t.Fatal("second created=true want false")
+	}
+	if second.Source.ID != first.Source.ID {
+		t.Fatalf("id=%s want %s", second.Source.ID, first.Source.ID)
+	}
+
+	res = e.do(http.MethodGet, "/v1/sources/"+first.Source.ID.String(), e.grok, "")
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", res.StatusCode, body)
+	}
+	var got types.Source
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("get json: %v body=%s", err, body)
+	}
+	if got.ID != first.Source.ID || got.Body != "hello source" {
+		t.Fatalf("get=%+v", got)
+	}
+}
+
 func TestAdminMintToken(t *testing.T) {
 	e := newTestEnv(t)
 	res := e.do(http.MethodPost, "/v1/admin/tokens", e.admin, `{"harness":"claude","label":"dev"}`)

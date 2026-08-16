@@ -197,6 +197,49 @@ func (s *server) getMemory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, mem)
 }
 
+type ingestSourceResponse struct {
+	Source  types.Source `json:"source"`
+	Created bool         `json:"created"`
+}
+
+func (s *server) ingestSource(w http.ResponseWriter, r *http.Request) {
+	tok, ok := tokenFrom(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var src types.Source
+	if err := readJSON(r, &src); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	src.CreatedByHarness = tok.Harness
+	out, created, err := s.st.IngestSource(r.Context(), src)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, ingestSourceResponse{Source: out, Created: created})
+}
+
+func (s *server) getSource(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	src, err := s.st.GetSource(r.Context(), id)
+	if err != nil {
+		if strings.Contains(err.Error(), "source not found") {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, src)
+}
+
 func (s *server) recall(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Project string    `json:"project"`
