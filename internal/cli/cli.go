@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -43,6 +44,10 @@ commands:
   mcp               stdio MCP proxy to memoryd
   project           write MEMORY.md projection (--out)
   import claude     import a Claude auto-memory dir (--path, --dry-run)
+  inbox             list open proposals
+  accept            accept a proposal (<id>)
+  reject            reject a proposal (<id>)
+  lint              read-only diagnostics (--project)
 `
 
 // Env is the process environment for Run. Zero values use os and http defaults.
@@ -110,6 +115,14 @@ func Run(args []string, env Env) int {
 		return runProject(args[1:], env)
 	case "import":
 		return runImport(args[1:], env)
+	case "inbox":
+		return runInbox(args[1:], env)
+	case "accept":
+		return runAccept(args[1:], env)
+	case "reject":
+		return runReject(args[1:], env)
+	case "lint":
+		return runLint(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Stdout, usage)
 		return 0
@@ -678,4 +691,144 @@ func printImportPlan(w io.Writer, plan importclaude.Plan) {
 	for _, item := range plan.Memories {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", item.Kind, item.Title, item.File)
 	}
+}
+
+func runInbox(args []string, env Env) int {
+	fs := flag.NewFlagSet("inbox", flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	cfg := loadCfg(env)
+	if cfg.Token == "" {
+		fmt.Fprintln(env.Stderr, "MEMORY_TOKEN is required")
+		return 1
+	}
+	ps, err := newClient(cfg, env).listInbox()
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "inbox: %v\n", err)
+		return 1
+	}
+	for _, p := range ps {
+		fmt.Fprintf(env.Stdout, "%s\t%s\t%s\t%s\n", p.ID, p.Action, p.Reason, p.CreatedByHarness)
+	}
+	return 0
+}
+
+func runAccept(args []string, env Env) int {
+	return runInboxDecide("accept", args, env)
+}
+
+func runReject(args []string, env Env) int {
+	return runInboxDecide("reject", args, env)
+}
+
+func runInboxDecide(action string, args []string, env Env) int {
+	fs := flag.NewFlagSet(action, flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintf(env.Stderr, "usage: memory %s <id>\n", action)
+		return 2
+	}
+	cfg := loadCfg(env)
+	if cfg.Token == "" {
+		fmt.Fprintln(env.Stderr, "MEMORY_TOKEN is required")
+		return 1
+	}
+	if err := newClient(cfg, env).decideInbox(action, fs.Arg(0)); err != nil {
+		fmt.Fprintf(env.Stderr, "%s: %v\n", action, err)
+		return 1
+	}
+	fmt.Fprintln(env.Stdout, "ok")
+	return 0
+}
+
+func runLint(args []string, env Env) int {
+	fs := flag.NewFlagSet("lint", flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	project := fs.String("project", "", "project slug")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	cfg := loadCfg(env)
+	if cfg.Token == "" {
+		fmt.Fprintln(env.Stderr, "MEMORY_TOKEN is required")
+		return 1
+	}
+	findings, err := newClient(cfg, env).lint(*project)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "lint: %v\n", err)
+		return 1
+	}
+	for _, f := range findings {
+		page := ""
+		if f.PageID != "" {
+			page = f.PageID
+		}
+		fmt.Fprintf(env.Stdout, "%s\t%s\t%s\n", f.Kind, f.Message, page)
+	}
+	return 0
+}
+
+type inboxRow struct {
+	ID               string `json:"id"`
+	Action           string `json:"action"`
+	Reason           string `json:"reason"`
+	CreatedByHarness string `json:"created_by_harness"`
+}
+
+type lintFinding struct {
+	Kind    string `json:"kind"`
+	Message string `json:"message"`
+	PageID  string `json:"page_id"`
+}
+
+func (c *Client) listInbox() ([]inboxRow, error) {
+	res, raw, err := c.do(http.MethodGet, "/v1/inbox", nil)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, decodeAPIError(res.StatusCode, raw)
+	}
+	var got []inboxRow
+	if err := json.Unmarshal(raw, &got); err != nil {
+		return nil, err
+	}
+	return got, nil
+}
+
+func (c *Client) decideInbox(action, id string) error {
+	res, raw, err := c.do(http.MethodPost, "/v1/admin/inbox/"+id+"/"+action, map[string]string{})
+	if err != nil {
+		return err
+	}
+	if res.StatusCode != http.StatusOK {
+		return decodeAPIError(res.StatusCode, raw)
+	}
+	return nil
+}
+
+func (c *Client) lint(project string) ([]lintFinding, error) {
+	path := "/v1/lint"
+	if project != "" {
+		path += "?project=" + url.QueryEscape(project)
+	}
+	res, raw, err := c.do(http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, decodeAPIError(res.StatusCode, raw)
+	}
+	var got struct {
+		Findings []lintFinding `json:"findings"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		return nil, err
+	}
+	return got.Findings, nil
 }

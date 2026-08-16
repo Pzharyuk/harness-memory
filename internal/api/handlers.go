@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Pzharyuk/harness-memory/internal/auth"
+	"github.com/Pzharyuk/harness-memory/internal/lint"
 	"github.com/Pzharyuk/harness-memory/internal/recall"
 	"github.com/Pzharyuk/harness-memory/internal/types"
 )
@@ -342,6 +343,99 @@ func (s *server) recall(w http.ResponseWriter, r *http.Request) {
 		Project: budgetIndex(projectLines),
 		Recent:  []types.Revision{},
 	})
+}
+
+func (s *server) lint(w http.ResponseWriter, r *http.Request) {
+	findings, err := lint.RunWithOptions(r.Context(), s.st, r.URL.Query().Get("project"), lint.Options{
+		ProjectionDir: s.cfg.ProjectionDir,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if findings == nil {
+		findings = []lint.Finding{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"findings": findings})
+}
+
+func (s *server) listInbox(w http.ResponseWriter, r *http.Request) {
+	ps, err := s.st.ListOpenProposals(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, ps)
+}
+
+func (s *server) proposeInbox(w http.ResponseWriter, r *http.Request) {
+	tok, ok := tokenFrom(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var p types.Proposal
+	if err := readJSON(r, &p); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	p.CreatedByHarness = tok.Harness
+	out, err := s.st.InsertProposal(r.Context(), p)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *server) acceptInbox(w http.ResponseWriter, r *http.Request) {
+	tok, ok := tokenFrom(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := s.st.AcceptProposal(r.Context(), id, tok.Harness); err != nil {
+		writeProposalErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *server) rejectInbox(w http.ResponseWriter, r *http.Request) {
+	tok, ok := tokenFrom(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := s.st.RejectProposal(r.Context(), id, tok.Harness); err != nil {
+		writeProposalErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func writeProposalErr(w http.ResponseWriter, err error) {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "not found"):
+		writeError(w, http.StatusNotFound, "not found")
+	case strings.Contains(msg, "not open"):
+		writeError(w, http.StatusConflict, msg)
+	case strings.Contains(msg, "admin"):
+		writeError(w, http.StatusForbidden, "forbidden")
+	default:
+		writeError(w, http.StatusBadRequest, msg)
+	}
 }
 
 func (s *server) search(w http.ResponseWriter, r *http.Request) {

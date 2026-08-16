@@ -167,3 +167,83 @@ func TestImportClaudeDryRun(t *testing.T) {
 		t.Fatalf("dry-run missing kind: %q", text)
 	}
 }
+
+func TestInboxAcceptRejectLintHTTP(t *testing.T) {
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Method+" "+r.URL.RequestURI())
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/inbox":
+			_, _ = w.Write([]byte(`[{"id":"11111111-1111-1111-1111-111111111111","action":"update","reason":"conflict","status":"open","created_by_harness":"grok"}]`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/admin/inbox/11111111-1111-1111-1111-111111111111/accept":
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/admin/inbox/11111111-1111-1111-1111-111111111111/reject":
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/lint":
+			_, _ = w.Write([]byte(`{"findings":[{"kind":"broken_link","message":"[[missing]]"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	envFor := func(out *bytes.Buffer) Env {
+		return Env{
+			Stdout: out,
+			Stderr: io.Discard,
+			Getenv: func(key string) string {
+				switch key {
+				case "MEMORY_URL":
+					return srv.URL
+				case "MEMORY_TOKEN":
+					return "admin-token"
+				default:
+					return ""
+				}
+			},
+			HTTP: srv.Client(),
+		}
+	}
+
+	var inboxOut bytes.Buffer
+	if code := Run([]string{"inbox"}, envFor(&inboxOut)); code != 0 {
+		t.Fatalf("inbox exit=%d out=%q", code, inboxOut.String())
+	}
+	if !strings.Contains(inboxOut.String(), "11111111-1111-1111-1111-111111111111") {
+		t.Fatalf("inbox missing id: %q", inboxOut.String())
+	}
+
+	var acceptOut bytes.Buffer
+	if code := Run([]string{"accept", "11111111-1111-1111-1111-111111111111"}, envFor(&acceptOut)); code != 0 {
+		t.Fatalf("accept exit=%d out=%q", code, acceptOut.String())
+	}
+
+	var rejectOut bytes.Buffer
+	if code := Run([]string{"reject", "11111111-1111-1111-1111-111111111111"}, envFor(&rejectOut)); code != 0 {
+		t.Fatalf("reject exit=%d out=%q", code, rejectOut.String())
+	}
+
+	var lintOut bytes.Buffer
+	if code := Run([]string{"lint"}, envFor(&lintOut)); code != 0 {
+		t.Fatalf("lint exit=%d out=%q", code, lintOut.String())
+	}
+	if !strings.Contains(lintOut.String(), "broken_link") {
+		t.Fatalf("lint missing finding: %q", lintOut.String())
+	}
+
+	want := []string{
+		"GET /v1/inbox",
+		"POST /v1/admin/inbox/11111111-1111-1111-1111-111111111111/accept",
+		"POST /v1/admin/inbox/11111111-1111-1111-1111-111111111111/reject",
+		"GET /v1/lint",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("calls=%v want %v", got, want)
+	}
+	for i, w := range want {
+		if got[i] != w {
+			t.Fatalf("call[%d]=%q want %q", i, got[i], w)
+		}
+	}
+}

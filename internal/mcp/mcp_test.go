@@ -186,8 +186,14 @@ func TestToolsListHasSaveNotInboxAccept(t *testing.T) {
 	if !names["save"] {
 		t.Fatalf("tools/list missing save: %s", body)
 	}
+	if !names["lint"] {
+		t.Fatalf("tools/list missing lint: %s", body)
+	}
 	if names["inbox_accept"] {
 		t.Fatalf("tools/list must not contain inbox_accept: %s", body)
+	}
+	if names["accept"] {
+		t.Fatalf("tools/list must not contain accept: %s", body)
 	}
 	for _, forbid := range []string{"token_create", "token_list", "token_revoke", "create_token"} {
 		if names[forbid] {
@@ -270,5 +276,33 @@ func TestStdioProxyForwardsBearer(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"ok":true`) {
 		t.Fatalf("stdout=%s", out.String())
+	}
+}
+
+func TestMCPLintReturnsBrokenLink(t *testing.T) {
+	e := newTestEnv(t)
+	status, body := e.rpc(1, "tools/call", e.grok, map[string]any{
+		"name": "write_page",
+		"arguments": types.Page{
+			Scope:        types.ScopeUser,
+			Slug:         "lonely",
+			Title:        "Lonely",
+			BodyMarkdown: "see [[missing]]",
+			PageType:     types.PageTypeEntity,
+		},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("write_page status=%d body=%s", status, body)
+	}
+
+	status, body = e.rpc(2, "tools/call", e.grok, map[string]any{
+		"name":      "lint",
+		"arguments": map[string]any{"project": ""},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("lint status=%d body=%s", status, body)
+	}
+	if !strings.Contains(string(body), "broken_link") {
+		t.Fatalf("lint missing broken_link: %s", body)
 	}
 }

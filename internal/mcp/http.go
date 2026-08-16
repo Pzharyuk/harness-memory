@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Pzharyuk/harness-memory/internal/config"
+	"github.com/Pzharyuk/harness-memory/internal/lint"
 	"github.com/Pzharyuk/harness-memory/internal/recall"
 	"github.com/Pzharyuk/harness-memory/internal/store"
 	"github.com/Pzharyuk/harness-memory/internal/types"
@@ -184,7 +185,7 @@ func (h *handler) callTool(ctx context.Context, name, harness string, args json.
 	case "write_page":
 		return h.toolWritePage(ctx, harness, args)
 	case "lint":
-		return toolJSON(map[string]any{"findings": []any{}})
+		return h.toolLint(ctx, args)
 	case "inbox_list":
 		return h.toolInboxList(ctx)
 	case "inbox_propose":
@@ -320,6 +321,27 @@ func (h *handler) toolWritePage(ctx context.Context, harness string, args json.R
 		return "", err
 	}
 	return toolJSON(res)
+}
+
+func (h *handler) toolLint(ctx context.Context, args json.RawMessage) (string, error) {
+	var req struct {
+		Project string `json:"project"`
+	}
+	if len(args) > 0 {
+		if err := json.Unmarshal(args, &req); err != nil && err != io.EOF {
+			return "", fmt.Errorf("invalid arguments")
+		}
+	}
+	findings, err := lint.RunWithOptions(ctx, h.st, req.Project, lint.Options{
+		ProjectionDir: h.cfg.ProjectionDir,
+	})
+	if err != nil {
+		return "", err
+	}
+	if findings == nil {
+		findings = []lint.Finding{}
+	}
+	return toolJSON(map[string]any{"findings": findings})
 }
 
 func (h *handler) toolInboxList(ctx context.Context) (string, error) {

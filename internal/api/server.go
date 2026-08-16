@@ -27,6 +27,11 @@ func New(st *store.Store, cfg config.Config) http.Handler {
 	mux.HandleFunc("GET /v1/pages/{id}", s.getPage)
 	mux.HandleFunc("POST /v1/recall", s.recall)
 	mux.HandleFunc("POST /v1/search", s.search)
+	mux.HandleFunc("GET /v1/lint", s.lint)
+	mux.HandleFunc("GET /v1/inbox", s.listInbox)
+	mux.HandleFunc("POST /v1/inbox", s.proposeInbox)
+	mux.HandleFunc("POST /v1/admin/inbox/{id}/accept", s.acceptInbox)
+	mux.HandleFunc("POST /v1/admin/inbox/{id}/reject", s.rejectInbox)
 	mux.Handle("POST /mcp", mcp.New(st, cfg))
 	return s.withAuth(mux)
 }

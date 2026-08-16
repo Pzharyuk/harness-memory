@@ -432,3 +432,241 @@ func TestAdminMintToken(t *testing.T) {
 		t.Fatal("list leaked token_hash")
 	}
 }
+
+func TestLintBrokenLinkHTTP(t *testing.T) {
+	e := newTestEnv(t)
+	page := types.Page{
+		Scope:        types.ScopeUser,
+		Slug:         "lonely",
+		Title:        "Lonely",
+		BodyMarkdown: "see [[missing]]",
+		PageType:     types.PageTypeEntity,
+	}
+	raw, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := e.do(http.MethodPost, "/v1/pages", e.grok, string(raw))
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("write status=%d body=%s", res.StatusCode, body)
+	}
+
+	res = e.do(http.MethodGet, "/v1/lint", e.grok, "")
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("lint status=%d body=%s", res.StatusCode, body)
+	}
+	var got struct {
+		Findings []struct {
+			Kind string `json:"kind"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("json: %v body=%s", err, body)
+	}
+	found := false
+	for _, f := range got.Findings {
+		if f.Kind == "broken_link" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("missing broken_link: %s", body)
+	}
+}
+
+func TestInboxProposeAndList(t *testing.T) {
+	e := newTestEnv(t)
+	res := e.do(http.MethodPost, "/v1/inbox", e.grok, `{"action":"delete","payload":{"title":"x"},"reason":"cleanup"}`)
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("propose status=%d body=%s", res.StatusCode, body)
+	}
+	var created types.Proposal
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("json: %v body=%s", err, body)
+	}
+	if created.ID.String() == "00000000-0000-0000-0000-000000000000" {
+		t.Fatal("empty proposal id")
+	}
+	if created.CreatedByHarness != "grok" {
+		t.Fatalf("harness=%q want grok", created.CreatedByHarness)
+	}
+
+	res = e.do(http.MethodGet, "/v1/inbox", e.grok, "")
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("list status=%d body=%s", res.StatusCode, body)
+	}
+	var listed []types.Proposal
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatalf("list json: %v body=%s", err, body)
+	}
+	if len(listed) != 1 || listed[0].ID != created.ID {
+		t.Fatalf("listed=%+v", listed)
+	}
+}
+
+func TestAcceptForbiddenForGrok(t *testing.T) {
+	e := newTestEnv(t)
+	mem := types.Memory{
+		Scope:   types.ScopeUser,
+		Kind:    types.MemoryKindUser,
+		Title:   "pipenv",
+		Summary: "use pipenv",
+		Body:    "use pipenv",
+	}
+	raw, err := json.Marshal(mem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := e.do(http.MethodPost, "/v1/memories", e.grok, string(raw))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("save status=%d body=%s", res.StatusCode, readBody(t, res))
+	}
+	readBody(t, res)
+
+	mem.Body = "use poetry"
+	raw, err = json.Marshal(mem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res = e.do(http.MethodPost, "/v1/memories", e.grok, string(raw))
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("conflict status=%d body=%s", res.StatusCode, body)
+	}
+	var proposed types.SaveResult
+	if err := json.Unmarshal(body, &proposed); err != nil {
+		t.Fatal(err)
+	}
+	if proposed.ProposalID == nil {
+		t.Fatal("missing proposal id")
+	}
+
+	res = e.do(http.MethodPost, "/v1/admin/inbox/"+proposed.ProposalID.String()+"/accept", e.grok, `{}`)
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", res.StatusCode, body)
+	}
+}
+
+func TestAcceptAdminUpdatesBodyHTTP(t *testing.T) {
+	e := newTestEnv(t)
+	mem := types.Memory{
+		Scope:   types.ScopeUser,
+		Kind:    types.MemoryKindUser,
+		Title:   "pipenv",
+		Summary: "use pipenv",
+		Body:    "use pipenv",
+	}
+	raw, err := json.Marshal(mem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := e.do(http.MethodPost, "/v1/memories", e.grok, string(raw))
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("save status=%d body=%s", res.StatusCode, body)
+	}
+
+	mem.Body = "use poetry"
+	raw, err = json.Marshal(mem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res = e.do(http.MethodPost, "/v1/memories", e.grok, string(raw))
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("conflict status=%d body=%s", res.StatusCode, body)
+	}
+	var proposed types.SaveResult
+	if err := json.Unmarshal(body, &proposed); err != nil {
+		t.Fatal(err)
+	}
+	if proposed.ProposalID == nil {
+		t.Fatal("missing proposal id")
+	}
+
+	res = e.do(http.MethodPost, "/v1/admin/inbox/"+proposed.ProposalID.String()+"/accept", e.admin, `{}`)
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("accept status=%d body=%s", res.StatusCode, body)
+	}
+
+	res = e.do(http.MethodGet, "/v1/memories/"+proposed.ID.String(), e.grok, "")
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", res.StatusCode, body)
+	}
+	var got types.Memory
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Body != "use poetry" {
+		t.Fatalf("body=%q want use poetry", got.Body)
+	}
+}
+
+func TestRejectLeavesOriginalHTTP(t *testing.T) {
+	e := newTestEnv(t)
+	mem := types.Memory{
+		Scope:   types.ScopeUser,
+		Kind:    types.MemoryKindUser,
+		Title:   "pipenv",
+		Summary: "use pipenv",
+		Body:    "use pipenv",
+	}
+	raw, err := json.Marshal(mem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := e.do(http.MethodPost, "/v1/memories", e.grok, string(raw))
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("save status=%d body=%s", res.StatusCode, body)
+	}
+	var saved types.SaveResult
+	if err := json.Unmarshal(body, &saved); err != nil {
+		t.Fatal(err)
+	}
+
+	mem.Body = "use poetry"
+	raw, err = json.Marshal(mem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res = e.do(http.MethodPost, "/v1/memories", e.grok, string(raw))
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("conflict status=%d body=%s", res.StatusCode, body)
+	}
+	var proposed types.SaveResult
+	if err := json.Unmarshal(body, &proposed); err != nil {
+		t.Fatal(err)
+	}
+	if proposed.ProposalID == nil {
+		t.Fatal("missing proposal id")
+	}
+
+	res = e.do(http.MethodPost, "/v1/admin/inbox/"+proposed.ProposalID.String()+"/reject", e.admin, `{}`)
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("reject status=%d body=%s", res.StatusCode, body)
+	}
+
+	res = e.do(http.MethodGet, "/v1/memories/"+saved.ID.String(), e.grok, "")
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", res.StatusCode, body)
+	}
+	var got types.Memory
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Body != "use pipenv" {
+		t.Fatalf("body=%q want original", got.Body)
+	}
+}
