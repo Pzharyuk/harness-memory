@@ -240,6 +240,43 @@ func (s *server) getSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, src)
 }
 
+func (s *server) writePage(w http.ResponseWriter, r *http.Request) {
+	tok, ok := tokenFrom(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var page types.Page
+	if err := readJSON(r, &page); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	res, err := s.st.WritePage(r.Context(), page, tok.Harness)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *server) getPage(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	page, err := s.st.GetPage(r.Context(), id)
+	if err != nil {
+		if strings.Contains(err.Error(), "page not found") {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
 func (s *server) recall(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Project string    `json:"project"`

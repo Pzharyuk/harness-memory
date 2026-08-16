@@ -22,6 +22,8 @@ func New(st *store.Store, cfg config.Config) http.Handler {
 	mux.HandleFunc("GET /v1/memories/{id}", s.getMemory)
 	mux.HandleFunc("POST /v1/sources", s.ingestSource)
 	mux.HandleFunc("GET /v1/sources/{id}", s.getSource)
+	mux.HandleFunc("POST /v1/pages", s.writePage)
+	mux.HandleFunc("GET /v1/pages/{id}", s.getPage)
 	mux.HandleFunc("POST /v1/recall", s.recall)
 	return s.withAuth(mux)
 }

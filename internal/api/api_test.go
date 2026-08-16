@@ -313,6 +313,53 @@ func TestIngestSourceIdempotentHTTP(t *testing.T) {
 	}
 }
 
+func TestWriteAndGetPageHTTP(t *testing.T) {
+	e := newTestEnv(t)
+	page := types.Page{
+		Scope:        types.ScopeUser,
+		Slug:         "vault-ha",
+		Title:        "Vault HA",
+		Summary:      "Vault high availability",
+		BodyMarkdown: "Vault runs in HA.",
+		PageType:     types.PageTypeEntity,
+	}
+	raw, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := e.do(http.MethodPost, "/v1/pages", e.grok, string(raw))
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("write status=%d body=%s", res.StatusCode, body)
+	}
+	var saved types.SaveResult
+	if err := json.Unmarshal(body, &saved); err != nil {
+		t.Fatalf("write json: %v body=%s", err, body)
+	}
+	if saved.Status != types.SaveStatusApplied {
+		t.Fatalf("status=%q want applied", saved.Status)
+	}
+	if saved.ID.String() == "00000000-0000-0000-0000-000000000000" {
+		t.Fatal("empty id")
+	}
+
+	res = e.do(http.MethodGet, "/v1/pages/"+saved.ID.String(), e.grok, "")
+	body = readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", res.StatusCode, body)
+	}
+	var got types.Page
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("get json: %v body=%s", err, body)
+	}
+	if got.ID != saved.ID || got.Slug != "vault-ha" || got.BodyMarkdown != "Vault runs in HA." {
+		t.Fatalf("get=%+v", got)
+	}
+	if got.UpdatedByHarness != "grok" {
+		t.Fatalf("harness=%q want grok", got.UpdatedByHarness)
+	}
+}
+
 func TestAdminMintToken(t *testing.T) {
 	e := newTestEnv(t)
 	res := e.do(http.MethodPost, "/v1/admin/tokens", e.admin, `{"harness":"claude","label":"dev"}`)
