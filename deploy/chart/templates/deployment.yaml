@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "harness-memory.fullname" . }}
+  labels:
+    {{- include "harness-memory.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "harness-memory.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "harness-memory.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: memoryd
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8741
+          env:
+            - name: MEMORY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: database-url
+            - name: MEMORY_LISTEN
+              value: {{ .Values.listen | quote }}

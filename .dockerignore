@@ -1,0 +1,13 @@
+.git
+.github
+.superpowers
+.worktrees
+bin
+dist
+docs
+deploy
+*.md
+.env
+.env.*
+!.env.example
+.DS_Store

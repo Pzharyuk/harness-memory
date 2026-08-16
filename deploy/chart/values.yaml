@@ -1,0 +1,17 @@
+# Image is a placeholder until releases publish one.
+image:
+  repository: harness-memory
+  pullPolicy: IfNotPresent
+  tag: ""
+
+# In-cluster listen binds all interfaces. This is opt-in vs brew/local
+# default of 127.0.0.1:8741.
+listen: ":8741"
+
+service:
+  type: ClusterIP
+  port: 8741
+
+# Existing Secret must contain key database-url (Postgres DSN).
+# No other secret keys are required.
+existingSecret: harness-memory
