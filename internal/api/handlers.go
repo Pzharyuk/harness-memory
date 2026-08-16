@@ -11,7 +11,13 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Pzharyuk/harness-memory/internal/auth"
+	"github.com/Pzharyuk/harness-memory/internal/recall"
 	"github.com/Pzharyuk/harness-memory/internal/types"
+)
+
+const (
+	recallMaxLines = 200
+	recallMaxBytes = 25 * 1024
 )
 
 // IndexLine is one recall index entry.
@@ -301,21 +307,67 @@ func (s *server) recall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.st.ListMemories(r.Context(), types.ScopeUser, "")
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	project, err := s.st.ListMemories(r.Context(), types.ScopeProject, req.Project)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
+	var userLines, projectLines []IndexLine
+	if req.Query != "" {
+		userScope := types.ScopeUser
+		userHits, err := s.st.Search(r.Context(), req.Query, &userScope, "", recallMaxLines)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		projScope := types.ScopeProject
+		projectHits, err := s.st.Search(r.Context(), req.Query, &projScope, req.Project, recallMaxLines)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		userLines = hitLines(s, userHits)
+		projectLines = hitLines(s, projectHits)
+	} else {
+		user, err := s.st.ListMemories(r.Context(), types.ScopeUser, "")
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		project, err := s.st.ListMemories(r.Context(), types.ScopeProject, req.Project)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		userLines = indexLines(s, user)
+		projectLines = indexLines(s, project)
 	}
 	writeJSON(w, http.StatusOK, recallResponse{
-		User:    indexLines(s, user),
-		Project: indexLines(s, project),
+		User:    budgetIndex(userLines),
+		Project: budgetIndex(projectLines),
 		Recent:  []types.Revision{},
 	})
+}
+
+func (s *server) search(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Q       string       `json:"q"`
+		Project string       `json:"project"`
+		Scope   *types.Scope `json:"scope"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if strings.TrimSpace(req.Q) == "" {
+		writeError(w, http.StatusBadRequest, "q is required")
+		return
+	}
+	if req.Scope != nil && *req.Scope != types.ScopeUser && *req.Scope != types.ScopeProject {
+		writeError(w, http.StatusBadRequest, "invalid scope")
+		return
+	}
+	hits, err := s.st.Search(r.Context(), req.Q, req.Scope, req.Project, 0)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, hits)
 }
 
 func indexLines(s *server, mems []types.Memory) []IndexLine {
@@ -332,8 +384,58 @@ func indexLines(s *server, mems []types.Memory) []IndexLine {
 	return out
 }
 
+func hitLines(s *server, hits []types.SearchHit) []IndexLine {
+	out := make([]IndexLine, 0, len(hits))
+	for _, h := range hits {
+		href := s.memoryHref(h.ID)
+		if h.Kind == "page" {
+			href = s.pageHref(h.ID)
+		}
+		out = append(out, IndexLine{
+			ID:      h.ID,
+			Kind:    h.Kind,
+			Title:   h.Title,
+			Summary: h.Summary,
+			Href:    href,
+		})
+	}
+	return out
+}
+
+func formatIndexLine(l IndexLine) string {
+	return l.Kind + " " + l.Title + " — " + l.Summary
+}
+
+func budgetIndex(lines []IndexLine) []IndexLine {
+	rendered := make([]string, len(lines))
+	for i, l := range lines {
+		rendered[i] = formatIndexLine(l)
+	}
+	kept := recall.Budget(rendered, recallMaxLines, recallMaxBytes)
+	n := len(kept)
+	overflow := n > 0 && kept[n-1] == recall.Overflow
+	if overflow {
+		n--
+	}
+	out := make([]IndexLine, 0, n+1)
+	if n > 0 {
+		out = append(out, lines[:n]...)
+	}
+	if overflow {
+		out = append(out, IndexLine{Title: recall.Overflow, Summary: recall.Overflow})
+	}
+	return out
+}
+
 func (s *server) memoryHref(id uuid.UUID) string {
-	path := "/v1/memories/" + id.String()
+	return s.apiHref("/v1/memories/" + id.String())
+}
+
+func (s *server) pageHref(id uuid.UUID) string {
+	return s.apiHref("/v1/pages/" + id.String())
+}
+
+func (s *server) apiHref(path string) string {
 	if s.cfg.URL == "" {
 		return path
 	}

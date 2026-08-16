@@ -189,3 +189,12 @@ const (
 	SaveStatusApplied  = "applied"
 	SaveStatusProposed = "proposed"
 )
+
+// SearchHit is one FTS match from memories or wiki pages.
+type SearchHit struct {
+	Kind    string    `json:"kind"`
+	ID      uuid.UUID `json:"id"`
+	Title   string    `json:"title"`
+	Summary string    `json:"summary"`
+	Rank    float64   `json:"rank"`
+}

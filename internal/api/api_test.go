@@ -360,6 +360,40 @@ func TestWriteAndGetPageHTTP(t *testing.T) {
 	}
 }
 
+func TestSearchPipenvRanksFirstHTTP(t *testing.T) {
+	e := newTestEnv(t)
+	for _, mem := range []types.Memory{
+		{Scope: types.ScopeUser, Kind: types.MemoryKindUser, Title: "pipenv", Summary: "use pipenv", Body: "use pipenv"},
+		{Scope: types.ScopeUser, Kind: types.MemoryKindUser, Title: "vault raft", Summary: "vault raft quorum", Body: "vault raft"},
+	} {
+		raw, err := json.Marshal(mem)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := e.do(http.MethodPost, "/v1/memories", e.grok, string(raw))
+		body := readBody(t, res)
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("save %q status=%d body=%s", mem.Title, res.StatusCode, body)
+		}
+	}
+
+	res := e.do(http.MethodPost, "/v1/search", e.grok, `{"q":"pipenv"}`)
+	body := readBody(t, res)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("search status=%d body=%s", res.StatusCode, body)
+	}
+	var hits []types.SearchHit
+	if err := json.Unmarshal(body, &hits); err != nil {
+		t.Fatalf("search json: %v body=%s", err, body)
+	}
+	if len(hits) == 0 {
+		t.Fatal("no hits")
+	}
+	if hits[0].Title != "pipenv" {
+		t.Fatalf("first title=%q want pipenv hits=%+v", hits[0].Title, hits)
+	}
+}
+
 func TestAdminMintToken(t *testing.T) {
 	e := newTestEnv(t)
 	res := e.do(http.MethodPost, "/v1/admin/tokens", e.admin, `{"harness":"claude","label":"dev"}`)
