@@ -7,10 +7,9 @@ class HarnessMemory < Formula
   license "MIT"
   head "https://github.com/Pzharyuk/harness-memory.git", branch: "main"
 
-  stable do
-    url "https://github.com/Pzharyuk/harness-memory/archive/refs/tags/v0.1.0.tar.gz"
-    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
-  end
+  url "https://github.com/Pzharyuk/harness-memory/archive/refs/heads/main.tar.gz"
+  sha256 :no_check
+  version "0.1.0"
 
   depends_on "go" => :build
   depends_on "postgresql@16"
