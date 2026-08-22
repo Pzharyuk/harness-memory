@@ -1,20 +1,24 @@
 # typed: false
 # frozen_string_literal: true
 
-# Template formula. Fill url and sha256 from the first GitHub Release
-# tarball (GoReleaser: harness-memory_<version>_<os>_<arch>.tar.gz).
 class HarnessMemory < Formula
   desc "Shared Postgres memory for coding agents"
   homepage "https://github.com/Pzharyuk/harness-memory"
-  url "https://github.com/Pzharyuk/harness-memory/releases/download/vX.Y.Z/harness-memory_X.Y.Z_darwin_arm64.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
+  head "https://github.com/Pzharyuk/harness-memory.git", branch: "main"
 
+  stable do
+    url "https://github.com/Pzharyuk/harness-memory/archive/refs/tags/v0.1.0.tar.gz"
+    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  end
+
+  depends_on "go" => :build
   depends_on "postgresql@16"
 
   def install
-    bin.install "memoryd"
-    bin.install "memory"
+    ldflags = "-s -w"
+    system "go", "build", "-trimpath", "-ldflags", ldflags, "-o", bin/"memoryd", "./cmd/memoryd"
+    system "go", "build", "-trimpath", "-ldflags", ldflags, "-o", bin/"memory", "./cmd/memory"
   end
 
   service do
@@ -29,21 +33,29 @@ class HarnessMemory < Formula
 
   def caveats
     <<~EOS
-      memoryd listens on 127.0.0.1:8741 and reads MEMORY_DATABASE_URL /
-      MEMORY_LISTEN from the environment (not config.toml).
+      Docs: https://github.com/Pzharyuk/harness-memory/blob/main/docs/install.md
 
-      After starting Postgres and creating the database:
+      Local brain (Postgres on this Mac):
 
         brew services start postgresql@16
         createdb memory
         brew services start harness-memory
         memory init
         memory token create --harness claude
+
+      Cluster brain (do NOT start the local service):
+
+        export MEMORY_URL=https://memory.onit.systems
+        memory init
+        memory token create --harness grok
+
+      Cluster Access is church office IP only (97.120.177.5).
     EOS
   end
 
   test do
     assert_path_exists bin/"memoryd"
     assert_path_exists bin/"memory"
+    assert_match "usage: memory", shell_output("#{bin}/memory -h")
   end
 end

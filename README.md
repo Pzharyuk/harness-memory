@@ -4,7 +4,35 @@ Shared Postgres memory for coding agents, with a [Karpathy LLM wiki](https://gis
 
 Point Claude Code, Grok, Codex, or anything that speaks MCP at one store. A fact one harness saves is recallable by the others.
 
-See the [design spec](docs/superpowers/specs/2026-08-15-harness-memory-design.md).
+**Read these first**
+
+- [Install](docs/install.md) — Homebrew, Kubernetes, plugin
+- [Usage](docs/usage.md) — tokens, CLI, MCP, troubleshooting
+- [Design spec](docs/superpowers/specs/2026-08-15-harness-memory-design.md)
+
+## Quick start (Homebrew)
+
+```sh
+brew tap Pzharyuk/tools
+brew install harness-memory
+brew services start postgresql@16
+createdb memory
+brew services start harness-memory
+memory init
+memory token create --harness claude
+```
+
+For the **cluster** brain instead (church IP only):
+
+```sh
+brew tap Pzharyuk/tools
+brew install harness-memory
+export MEMORY_URL=https://memory.onit.systems
+memory init
+memory token create --harness grok
+```
+
+Do not start local Postgres/`harness-memory` if you are using the cluster.
 
 ## What it is
 
@@ -16,17 +44,11 @@ See the [design spec](docs/superpowers/specs/2026-08-15-harness-memory-design.md
 
 ## Install
 
+Full steps: [docs/install.md](docs/install.md).
+
 ### Homebrew
 
-```
-brew tap Pzharyuk/tools
-brew install harness-memory
-brew services start postgresql@16
-createdb memory
-brew services start harness-memory
-```
-
-`brew services` runs `memoryd` on `127.0.0.1:8741`. The in-repo [`Formula/harness-memory.rb`](Formula/harness-memory.rb) is a template; `url` and `sha256` are filled on the first tagged GitHub Release.
+See the [quick start](#quick-start-homebrew). Formula: [`Formula/harness-memory.rb`](Formula/harness-memory.rb), published on [`Pzharyuk/tools`](https://github.com/Pzharyuk/homebrew-tools).
 
 ### Docker Compose
 

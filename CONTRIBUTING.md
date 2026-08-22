@@ -14,7 +14,7 @@ Copy `.env.example` to `.env` and adjust if needed. Start Postgres:
 make dev
 ```
 
-Compose is Postgres-only for now (`55432:5432`). `memoryd` will be added later.
+Compose is Postgres-only (`55432:5432`). Run `memoryd` yourself with `MEMORY_DATABASE_URL` pointing at that instance.
 
 ## Tests
 
