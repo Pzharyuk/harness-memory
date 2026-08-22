@@ -41,17 +41,37 @@ MEMORY_DATABASE_URL="$MEMORY_DATABASE_URL" ./bin/memoryd
 
 Or `docker build -t harness-memory .` and run the image with the same env. Binding `0.0.0.0` / `:8741` is opt-in (used in-cluster).
 
-### Helm
+### Kubernetes (shared / central brain)
+
+This is the path for one Postgres that every harness talks to. The chart can run **Postgres + `memoryd` in the same release**, or only `memoryd` against an existing DSN.
+
+```
+# Secret with key database-url (and POSTGRES_PASSWORD if postgres.enabled)
+kubectl create secret generic harness-memory \
+  --from-literal=database-url='postgres://harness:PASSWORD@postgres:5432/harness?sslmode=disable' \
+  --from-literal=POSTGRES_PASSWORD='PASSWORD'
+
+helm install harness-memory deploy/chart \
+  --set postgres.enabled=true \
+  --set postgres.storageClass=your-storage-class \
+  --set image.tag=latest
+```
+
+`memoryd` applies schema migrations on boot. Point Claude/Grok at the Service (or ingress) with `MEMORY_URL` and a per-harness `MEMORY_TOKEN`. Do **not** also run Homebrew Postgres if this cluster DB is the source of truth.
+
+Image: `ghcr.io/pzharyuk/harness-memory` (built on push to `main`). In-cluster listen is `:8741` (all interfaces).
+
+### Helm (bring-your-own Postgres)
 
 ```
 helm install harness-memory deploy/chart
 ```
 
-Create a Secret named `harness-memory` with key `database-url` (Postgres DSN) first. In-cluster listen is `:8741` (all interfaces) via values — opt-in vs brew/local `127.0.0.1:8741`. The chart image is a placeholder until releases publish one.
+Create a Secret named `harness-memory` with key `database-url` (Postgres DSN) first.
 
 ### Plugin (Claude / Grok)
 
-The marketplace plugin lives in [`Pzharyuk/ai-claude-plugins`](https://github.com/Pzharyuk/ai-claude-plugins) (planned; not in this repo):
+The marketplace plugin lives in [`Pzharyuk/ai-claude-plugins`](https://github.com/Pzharyuk/ai-claude-plugins):
 
 ```
 /plugin marketplace add Pzharyuk/ai-claude-plugins
@@ -67,7 +87,7 @@ grok plugin install harness-memory --trust
 
 The plugin is a thin HTTP MCP client. **`memoryd` is still required.** Set `MEMORY_TOKEN` (and `MEMORY_URL` if not `http://127.0.0.1:8741`).
 
-Until the plugin is published, point any MCP client at `POST http://127.0.0.1:8741/mcp` with `Authorization: Bearer <token>`, or use `memory mcp` as a stdio proxy.
+For a cluster `memoryd`, set `MEMORY_URL` to that base URL (MCP is `POST {MEMORY_URL}/mcp`). Or use `memory mcp` as a stdio proxy to localhost.
 
 ## First run
 

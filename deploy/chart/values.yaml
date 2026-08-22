@@ -1,8 +1,7 @@
-# Image is a placeholder until releases publish one.
 image:
-  repository: harness-memory
+  repository: ghcr.io/pzharyuk/harness-memory
   pullPolicy: IfNotPresent
-  tag: ""
+  tag: latest
 
 # In-cluster listen binds all interfaces. This is opt-in vs brew/local
 # default of 127.0.0.1:8741.
@@ -12,6 +11,33 @@ service:
   type: ClusterIP
   port: 8741
 
-# Existing Secret must contain key database-url (Postgres DSN).
-# No other secret keys are required.
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Secret with key database-url (Postgres DSN). When postgres.enabled is true,
+# also provide POSTGRES_PASSWORD in the same secret (and optionally
+# POSTGRES_USER / POSTGRES_DB as chart values).
 existingSecret: harness-memory
+
+# Optional in-cluster Postgres StatefulSet. memoryd applies migrations on boot.
+postgres:
+  enabled: false
+  image: postgres:16-alpine
+  storage: 5Gi
+  storageClass: ""
+  database: harness
+  user: harness
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
