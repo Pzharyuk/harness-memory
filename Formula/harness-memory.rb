@@ -7,8 +7,8 @@ class HarnessMemory < Formula
   license "MIT"
   head "https://github.com/Pzharyuk/harness-memory.git", branch: "main"
 
-  url "https://github.com/Pzharyuk/harness-memory/archive/refs/heads/main.tar.gz"
-  sha256 :no_check
+  url "https://github.com/Pzharyuk/harness-memory/archive/d2941c6bc841b91d87d5a9dcf6fc91fd4f958222.tar.gz"
+  sha256 "e0416cbf3e4522749dc8faf74efc932c62e8d96938b951e5378664e7a71165d4"
   version "0.1.0"
 
   depends_on "go" => :build
