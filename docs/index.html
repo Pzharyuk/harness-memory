@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>harness-memory docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c0e12;
+      --panel: #141821;
+      --panel-2: #1b2130;
+      --line: #2a3348;
+      --text: #e8edf7;
+      --muted: #8b97ad;
+      --accent: #6ee7b7;
+      --accent-2: #93c5fd;
+      --warn: #fbbf24;
+      --bad: #f87171;
+      --ok: #34d399;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", system-ui, sans-serif; }
+    body { min-height: 100vh; }
+    a { color: var(--accent-2); }
+    header {
+      position: sticky; top: 0; z-index: 5;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 14px 22px; border-bottom: 1px solid var(--line); background: rgba(12,14,18,.92);
+      backdrop-filter: blur(8px);
+    }
+    .brand { font-weight: 700; letter-spacing: .02em; }
+    .brand span { color: var(--accent); }
+    .layout { display: grid; grid-template-columns: 240px 1fr; max-width: 1100px; margin: 0 auto; }
+    nav { padding: 22px 16px; border-right: 1px solid var(--line); position: sticky; top: 57px; height: calc(100vh - 57px); overflow: auto; }
+    nav a { display: block; color: var(--muted); text-decoration: none; padding: 7px 10px; border-radius: 8px; font-size: 14px; }
+    nav a:hover, nav a.active { background: var(--panel-2); color: var(--text); }
+    nav .sec { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 16px 10px 6px; }
+    main { padding: 28px 28px 80px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    h2 { font-size: 20px; margin: 36px 0 12px; }
+    p, li { color: var(--muted); line-height: 1.55; }
+    .lede { font-size: 17px; max-width: 62ch; }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 10px; }
+    button.pill, .pill {
+      appearance: none; border: 1px solid var(--line); background: var(--panel);
+      color: var(--text); padding: 8px 14px; border-radius: 999px; cursor: pointer; font: inherit;
+    }
+    button.pill.on { border-color: var(--accent); color: var(--accent); background: #10241c; }
+    .step { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 12px 0; }
+    .step h3 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+    .num { width: 24px; height: 24px; border-radius: 50%; background: var(--panel-2); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: var(--accent); }
+    pre {
+      position: relative; background: #0a0c10; border: 1px solid var(--line); border-radius: 10px;
+      padding: 14px 14px 14px; overflow: auto; font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 13px; line-height: 1.45; color: #d7e3f4;
+    }
+    .copy {
+      position: absolute; top: 8px; right: 8px; font: inherit; font-size: 12px;
+      background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+      border-radius: 6px; padding: 4px 8px; cursor: pointer;
+    }
+    .copy.done { color: var(--ok); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    .ok { color: var(--ok); }
+    .check { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; color: var(--text); }
+    .check input { margin-top: 3px; }
+    .hidden { display: none !important; }
+    footer { padding: 24px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }
+    @media (max-width: 820px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">harness-<span>memory</span> docs</div>
+    <a href="https://github.com/Pzharyuk/harness-memory">GitHub</a>
+  </header>
+  <div class="layout">
+    <nav>
+      <div class="sec">Start</div>
+      <a href="#start" class="active">Interactive setup</a>
+      <a href="#tokens">Tokens</a>
+      <a href="#plugin">Plugin</a>
+      <a href="#cli">CLI</a>
+      <div class="sec">Ops</div>
+      <a href="#cluster">Cluster / Vault</a>
+      <a href="#local">Local brew</a>
+      <a href="#trouble">Troubleshooting</a>
+    </nav>
+    <main>
+      <h1>Interactive setup</h1>
+      <p class="lede">Shared memory for Grok, Claude, and other harnesses. One Postgres brain. Click your path, copy each command, check off steps.</p>
+
+      <div class="pills" id="brainPills">
+        <button class="pill on" data-brain="cluster">Cluster brain</button>
+        <button class="pill" data-brain="local">Local Homebrew brain</button>
+      </div>
+      <div class="pills" id="harnessPills">
+        <button class="pill on" data-harness="grok">Grok</button>
+        <button class="pill" data-harness="claude">Claude Code</button>
+      </div>
+
+      <section id="start">
+        <div class="step">
+          <h3><span class="num">1</span> Install the CLI</h3>
+          <pre><button class="copy">Copy</button><code>brew tap Pzharyuk/tools
+brew update
+brew untap Pzharyuk/tools
+brew tap Pzharyuk/tools
+brew install harness-memory</code></pre>
+          <p>If Homebrew complains about checksums: <code>brew cleanup -s harness-memory && brew install harness-memory</code></p>
+          <label class="check"><input type="checkbox" data-key="cli"> CLI installed (<code>memory -h</code> works)</label>
+        </div>
+
+        <div class="step cluster-only">
+          <h3><span class="num">2</span> Point at the cluster</h3>
+          <p class="warn">Must be on church office IP <code>97.120.177.5</code>. Home is denied at Cloudflare Access.</p>
+          <pre><button class="copy">Copy</button><code>export MEMORY_URL=https://memory.onit.systems</code></pre>
+          <p>Do <strong>not</strong> run <code>brew services start postgresql@16</code> or <code>brew services start harness-memory</code>.</p>
+          <label class="check"><input type="checkbox" data-key="url"> <code>MEMORY_URL</code> set</label>
+        </div>
+
+        <div class="step local-only hidden">
+          <h3><span class="num">2</span> Start local Postgres + memoryd</h3>
+          <pre><button class="copy">Copy</button><code>brew services start postgresql@16
+createdb memory
+brew services start harness-memory</code></pre>
+          <p>Listens on <code>http://127.0.0.1:8741</code>.</p>
+          <label class="check"><input type="checkbox" data-key="locald"> Local daemon up</label>
+        </div>
+
+        <div class="step">
+          <h3><span class="num">3</span> Mint tokens</h3>
+          <p><code>memory token create</code> prints <span class="bad">MEMORY_TOKEN is required</span> until you run <code>memory init</code> and export the <strong>admin</strong> token.</p>
+          <pre><button class="copy">Copy</button><code>memory init
+export MEMORY_TOKEN='&lt;paste admin token&gt;'
+memory token create --harness grok
+memory token create --harness claude</code></pre>
+          <p>If <code>init</code> returns 409, admin already exists — reuse the saved admin token. Plugin gets the <strong>harness</strong> token, not admin.</p>
+          <label class="check"><input type="checkbox" data-key="tokens"> Admin + harness tokens saved</label>
+        </div>
+
+        <div class="step grok-only">
+          <h3><span class="num">4</span> Install the Grok plugin</h3>
+          <p>Not on the Plugins tab until installed. Marketplace source is <strong>ai-claude-plugins</strong>, not xAI Official. Refresh first.</p>
+          <pre><button class="copy">Copy</button><code>grok plugin marketplace add Pzharyuk/ai-claude-plugins
+grok plugin marketplace update ai-claude-plugins
+grok plugin install harness-memory --trust</code></pre>
+          <p>When prompted:</p>
+          <pre><button class="copy">Copy</button><code>MEMORY_URL=https://memory.onit.systems
+MEMORY_TOKEN=&lt;grok token from step 3&gt;</code></pre>
+          <p class="local-only hidden">Local: leave <code>MEMORY_URL</code> as <code>http://127.0.0.1:8741</code>.</p>
+          <label class="check"><input type="checkbox" data-key="plugingrok"> Grok plugin installed + trusted</label>
+        </div>
+
+        <div class="step claude-only hidden">
+          <h3><span class="num">4</span> Install the Claude plugin</h3>
+          <pre><button class="copy">Copy</button><code>/plugin marketplace add Pzharyuk/ai-claude-plugins
+/plugin install harness-memory@ai-claude-plugins</code></pre>
+          <p>If it still does not list, Marketplace tab <code>r</code>, or:</p>
+          <pre><button class="copy">Copy</button><code>git -C ~/.claude/plugins/marketplaces/ai-claude-plugins pull</code></pre>
+          <pre><button class="copy">Copy</button><code>MEMORY_URL=https://memory.onit.systems
+MEMORY_TOKEN=&lt;claude token from step 3&gt;</code></pre>
+          <label class="check"><input type="checkbox" data-key="pluginclaude"> Claude plugin installed</label>
+        </div>
+
+        <div class="step">
+          <h3><span class="num">5</span> First session</h3>
+          <p>Open a project. The agent should <code>recall</code>, then <code>save</code>. Confirm the same fact from the other harness.</p>
+          <label class="check"><input type="checkbox" data-key="session"> Recalled and saved across harnesses</label>
+        </div>
+      </section>
+
+      <section id="tokens">
+        <h2>Tokens</h2>
+        <table>
+          <tr><th>Token</th><th>Who</th><th>What</th></tr>
+          <tr><td>admin</td><td>you / CLI</td><td>mint/revoke, inbox accept/reject</td></tr>
+          <tr><td>grok / claude</td><td>that harness</td><td>recall, save, wiki, propose — never accept</td></tr>
+        </table>
+      </section>
+
+      <section id="plugin">
+        <h2>Plugin</h2>
+        <p>HTTP MCP: <code>POST ${MEMORY_URL}/mcp</code> with <code>Authorization: Bearer &lt;harness token&gt;</code>. No Node server. Tools: recall, save, search, ingest_source, read_page, write_page, lint, inbox_list, inbox_propose. No inbox_accept on MCP.</p>
+      </section>
+
+      <section id="cli">
+        <h2>CLI</h2>
+        <pre><button class="copy">Copy</button><code>memory status
+memory token list
+memory inbox
+memory accept &lt;id&gt;
+memory lint
+memory import claude --path ~/.claude/projects/&lt;encoded&gt;/memory --dry-run
+memory mcp</code></pre>
+      </section>
+
+      <section id="cluster">
+        <h2>Cluster / Vault</h2>
+        <p>Namespace <code>harness-memory</code>. Vault KV <code>secret/harness-memory/app</code> (not <code>secret/harness-memory</code> without <code>/app</code>).</p>
+        <pre><button class="copy">Copy</button><code>PW="$(openssl rand -base64 24)"
+vault kv put secret/harness-memory/app \
+  POSTGRES_USER=harness \
+  POSTGRES_DB=harness \
+  POSTGRES_PASSWORD="$PW" \
+  DATABASE_URL="postgres://harness:${PW}@postgres:5432/harness?sslmode=disable"
+
+kubectl annotate externalsecret harness-memory-secrets -n harness-memory \
+  force-sync="$(date +%s)" --overwrite
+kubectl get pods,externalsecret -n harness-memory</code></pre>
+      </section>
+
+      <section id="local">
+        <h2>Local brew (not shared)</h2>
+        <pre><button class="copy">Copy</button><code>brew services start postgresql@16
+createdb memory
+brew services start harness-memory
+memory init</code></pre>
+        <p>Do not use this and the cluster as two brains at once.</p>
+      </section>
+
+      <section id="trouble">
+        <h2>Troubleshooting</h2>
+        <table>
+          <tr><th>Symptom</th><th>Fix</th></tr>
+          <tr><td><code>MEMORY_TOKEN is required</code></td><td><code>memory init</code> first, export admin token, then <code>token create</code>.</td></tr>
+          <tr><td>Plugin missing after update</td><td>Refresh marketplace; look under ai-claude-plugins; it is not installed until you install it.</td></tr>
+          <tr><td>Checksum / <code>no_check</code></td><td><code>brew untap Pzharyuk/tools && brew tap Pzharyuk/tools && brew install harness-memory</code></td></tr>
+          <tr><td>403 / Access</td><td>Church IP only.</td></tr>
+          <tr><td>init 409</td><td>Admin exists; reuse saved admin token.</td></tr>
+          <tr><td>Vault Secret does not exist</td><td>Path must be <code>secret/harness-memory/app</code>.</td></tr>
+        </table>
+      </section>
+    </main>
+  </div>
+  <footer>harness-memory · MIT · <a href="https://github.com/Pzharyuk/harness-memory">source</a></footer>
+  <script>
+    const brainPills = document.querySelectorAll("#brainPills .pill");
+    const harnessPills = document.querySelectorAll("#harnessPills .pill");
+    const state = JSON.parse(localStorage.getItem("hm-docs") || "{}");
+    let brain = state.brain || "cluster";
+    let harness = state.harness || "grok";
+
+    function save() {
+      localStorage.setItem("hm-docs", JSON.stringify({ brain, harness, checks: collectChecks() }));
+    }
+    function collectChecks() {
+      const o = {};
+      document.querySelectorAll("input[data-key]").forEach((el) => { o[el.dataset.key] = el.checked; });
+      return o;
+    }
+    function apply() {
+      brainPills.forEach((b) => b.classList.toggle("on", b.dataset.brain === brain));
+      harnessPills.forEach((b) => b.classList.toggle("on", b.dataset.harness === harness));
+      document.querySelectorAll(".cluster-only").forEach((el) => el.classList.toggle("hidden", brain !== "cluster"));
+      document.querySelectorAll(".local-only").forEach((el) => el.classList.toggle("hidden", brain !== "local"));
+      document.querySelectorAll(".grok-only").forEach((el) => el.classList.toggle("hidden", harness !== "grok"));
+      document.querySelectorAll(".claude-only").forEach((el) => el.classList.toggle("hidden", harness !== "claude"));
+    }
+    brainPills.forEach((b) => b.addEventListener("click", () => { brain = b.dataset.brain; apply(); save(); }));
+    harnessPills.forEach((b) => b.addEventListener("click", () => { harness = b.dataset.harness; apply(); save(); }));
+    document.querySelectorAll("input[data-key]").forEach((el) => {
+      el.checked = !!(state.checks && state.checks[el.dataset.key]);
+      el.addEventListener("change", save);
+    });
+    document.querySelectorAll("pre").forEach((pre) => {
+      const btn = pre.querySelector(".copy");
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        const text = pre.querySelector("code").innerText;
+        await navigator.clipboard.writeText(text);
+        btn.textContent = "Copied";
+        btn.classList.add("done");
+        setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("done"); }, 1200);
+      });
+    });
+    apply();
+  </script>
+</body>
+</html>

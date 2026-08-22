@@ -1,5 +1,7 @@
 # Install
 
+Click-through setup with copy buttons: [interactive docs](index.html).
+
 Three ways to run the store, then a client (plugin or CLI) that talks to it.
 Pick **one** store. Do not run Homebrew Postgres and the cluster Postgres at
 the same time for the same brain.
